@@ -13,7 +13,9 @@
     getFirestore,
     doc,
     getDoc,
-    setDoc
+    setDoc,
+    collection,
+    getDocs
   } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -32,7 +34,9 @@
     db,
     doc,
     getDoc,
-    setDoc
+    setDoc,
+    collection,
+    getDocs
   };
 
   window.dispatchEvent(new Event("firebase-ready"));
@@ -122,6 +126,21 @@
     return !!snap.data().completed;
   }
 
+  // Fetch all activities in 1 request to prevent connection timeouts
+  let globalStatuses = null;
+  async function loadAllStatuses() {
+    const fb = window.pharmethystFirebase;
+    if (!fb) return null;
+    if (globalStatuses) return globalStatuses; // Use cache if already loaded
+    
+    const snap = await fb.getDocs(fb.collection(fb.db, ACTIVITY_COLLECTION));
+    globalStatuses = {};
+    snap.forEach(d => {
+      globalStatuses[d.id] = !!d.data().completed;
+    });
+    return globalStatuses;
+  }
+
   async function writeActivityStatus(activityId, completed) {
     const fb = window.pharmethystFirebase;
     if (!fb) throw new Error('Firebase is not ready.');
@@ -154,20 +173,29 @@
       setTimeout(resolve, 5000);
     });
 
+    // Fetch all statuses at once
+    let allStatuses = null;
+    let bulkReadFailed = false;
+    try {
+      allStatuses = await loadAllStatuses();
+    } catch (e) {
+      console.error('Bulk Firebase read failed. Check your Firestore Security Rules if this is a permission error.', e);
+      bulkReadFailed = true;
+    }
+
     for (const box of statusBoxes) {
       const activityId = box.getAttribute('data-activity-status');
       const button = box.querySelector('.complete-btn');
       if (!button) continue;
 
-      try {
-        const saved = await readActivityStatus(activityId);
-        setButtonVisual(button, !!saved);
-        updateSyncText(box, 'Synced with Firebase');
-        refreshCompletionSummary();
-      } catch (error) {
-        console.error('Unable to load activity status', activityId, error);
+      if (bulkReadFailed) {
         setButtonVisual(button, localStorage.getItem('activity-complete-' + activityId) === 'true');
         updateSyncText(box, 'Firebase read failed', true);
+      } else {
+        const saved = allStatuses && allStatuses[activityId];
+        setButtonVisual(button, !!saved);
+        updateSyncText(box, window.pharmethystFirebase ? 'Synced with Firebase' : 'Using Local Storage');
+        refreshCompletionSummary();
       }
 
       button.addEventListener('click', async () => {
@@ -182,7 +210,7 @@
           updateSyncText(box, completed ? 'Saved as completed' : 'Saved as incomplete');
           refreshCompletionSummary();
         } catch (error) {
-          console.error('Unable to save activity status', activityId, error);
+          console.error('Unable to save to Firebase. If this is a permission error, check your Firestore Security Rules.', activityId, error);
           updateSyncText(box, 'Could not save to Firebase', true);
         } finally {
           button.disabled = false;
