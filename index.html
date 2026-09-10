@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:"class"}</script>
+<title>Pharmethyst Fresher's Schedule</title>
+<style>
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+  @media print {
+    .theme-switcher { display:none !important; }
+    body { padding:0 !important; background:#fff !important; color:#000 !important; }
+    .page { width:100% !important; box-shadow:none !important; }
+  }
+</style>
+<script>
+(function(){
+  const STORAGE_KEY='pharmethyst-theme';
+  const media=window.matchMedia('(prefers-color-scheme: dark)');
+  const selectTheme=(theme)=>{
+    const isDark=theme==='dark' || (theme==='system' && media.matches);
+    document.documentElement.classList.toggle('dark',isDark);
+    document.documentElement.style.colorScheme=isDark?'dark':'light';
+    const select=document.getElementById('theme-select');
+    if(select && select.value!==theme) select.value=theme;
+  };
+  const saved=localStorage.getItem(STORAGE_KEY)||'system';
+  window.applyTheme=(theme)=>{
+    localStorage.setItem(STORAGE_KEY,theme);
+    selectTheme(theme);
+  };
+  document.addEventListener('DOMContentLoaded',()=>{
+    const select=document.getElementById('theme-select');
+    if(select){
+      select.value=saved;
+      select.addEventListener('change',e=>window.applyTheme(e.target.value));
+    }
+    selectTheme(saved);
+    media.addEventListener?.('change',()=>{
+      if((localStorage.getItem(STORAGE_KEY)||'system')==='system') selectTheme('system');
+    });
+    document.querySelectorAll('audio').forEach(audio=>{
+      const src=audio.querySelector('source')?.getAttribute('src');
+      if(!src) return;
+      audio.addEventListener('error',()=>{
+        let status=audio.parentElement.querySelector('.audio-status');
+        if(!status){
+          status=document.createElement('span');
+          status.className='audio-status block mt-1 text-xs font-semibold text-red-600 dark:text-red-400';
+          audio.parentElement.appendChild(status);
+        }
+        status.textContent='Audio file not found or unsupported: '+src;
+      },{once:true});
+      audio.load();
+    });
+  });
+})();
+</script>
+<style>
+  table tbody tr:not(.bg-purple-200):not(.dark\:bg-purple-900\/70):nth-child(even) td { background-color:#fdfaff; }
+  html.dark table tbody tr:not(.bg-purple-200):not(.dark\:bg-purple-900\/70):nth-child(even) td { background-color:#20232b; }
+  audio { display:block; max-width:100%; width:320px; margin-top:8px; }
+</style>
+</head>
+<body class="min-h-screen bg-purple-50 px-5 py-5 text-gray-900 transition-colors duration-200 dark:bg-gray-950 dark:text-gray-100 sm:px-3">
+
+<div class="theme-switcher sticky top-3 z-50 mx-auto mb-6 flex w-full max-w-[800px] items-center justify-end gap-2 rounded-xl border border-purple-200 bg-white/95 px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+  <label for="theme-select" class="text-gray-700 dark:text-gray-200">Theme</label>
+  <select id="theme-select" class="cursor-pointer rounded-lg border border-purple-200 bg-white px-3 py-1.5 text-gray-800 outline-none ring-purple-400 focus:ring-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+    <option value="light">Light</option>
+    <option value="dark">Dark</option>
+    <option value="system">System Default</option>
+  </select>
+</div>
+<!-- PAGE 1 -->
+<div class="page mx-auto mb-10 box-border w-[800px] max-w-full rounded-2xl border-t-[10px] border-purple-600 bg-white p-10 shadow-xl shadow-black/10 transition-colors duration-200 dark:border-purple-400 dark:bg-gray-900 dark:shadow-black/40 sm:px-6">
+  <div class="header mb-5 text-center">
+    <img src="logo.png" alt="Pharmethyst Logo" class="mx-auto mb-4 max-h-20">
+    <h2 class="m-0 mb-2.5 text-base font-semibold text-gray-900 underline dark:text-gray-100">Schedule for Fresher’s Welcome for B.Pharm & BMLS:</h2>
+  </div>
+  <div class="mb-1 text-[15px] font-bold text-gray-800 dark:text-gray-200">Starting Time: 10:00 am</div>
+  <div class="mb-1 text-[15px] font-bold text-gray-800 dark:text-gray-200">Attendance Timing: 10:00 am-10.20 am</div>
+  <table class="mt-4 w-full border-collapse"><thead><tr>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">S.No.</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
+  </tr></thead><tbody>
+    <tr><td class="sno-cell">1</td><td class="time-cell">10.30 am-10:35 am</td><td class="activity-cell">Introduction and Speech of Principal Sir.</td></tr>
+    <tr><td class="sno-cell">2</td><td class="time-cell">10:36 am-10:45 am</td><td class="activity-cell">Lamp Lighting Ceremony.</td></tr>
+    <tr><td class="sno-cell">3</td><td class="time-cell">10:46 am-10:50 am</td><td class="activity-cell">Opening Song by Sutapa Majumder Ma’am.</td></tr>
+    <tr><td class="sno-cell">4</td><td class="time-cell">10:51 am-10:55 am</td><td class="activity-cell">Solo Dance by Rupsa Sarkar (2nd Year).<br><audio controls preload="metadata"><source src="4.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">5</td><td class="time-cell">10:56 am -11:00 am</td><td class="activity-cell">(D.Pharm 1st Year) Group Song by Sukanta Nath, Purnima Gomasta, Sabnam Khatun, Koyeli Das.<br><video controls playsinline preload="metadata"><source src="5.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">6</td><td class="time-cell">11:01 am-11:15 am</td><td class="activity-cell">1st Year Introduction &amp; Felicitation. (Roll No. 01-15)</td></tr>
+    <tr><td class="sno-cell">7</td><td class="time-cell">11:16 am-11:30 am</td><td class="activity-cell">Drama Play (4th Year).</td></tr>
+    <tr><td class="sno-cell">8</td><td class="time-cell">11:31 am - 11:35 am</td><td class="activity-cell">Dance by Mili Mondal (1st Year).<br><audio controls preload="metadata"><source src="8.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">9</td><td class="time-cell">11:36 am - 11:40 am</td><td class="activity-cell">Duet Song by Upasana Dutta &amp; Soumily Dutta (2nd Year).</td></tr>
+    <tr><td class="sno-cell">10</td><td class="time-cell">11:41 am-11:55 am</td><td class="activity-cell">1st Your Introduction &amp; Felicitation. (Roll No. 16-30)</td></tr>
+    <tr><td class="sno-cell">11</td><td class="time-cell">11:56 am-12:00 pm</td><td class="activity-cell">Principal sir Performance.</td></tr>
+    <tr><td class="sno-cell">12</td><td class="time-cell">12:01 pm- 12:10 pm</td><td class="activity-cell">Solo song by Abir Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="12.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">13</td><td class="time-cell">12:11 pm-12:15 pm</td><td class="activity-cell">Dance by Mouli Karmakar (D.Pharm 1st Year).<br><audio controls preload="metadata"><source src="13.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">14</td><td class="time-cell">12:16 pm-12:30 pm</td><td class="activity-cell">1st Year Introduction and Felicitation. (Roll No. 31-Rest)</td></tr>
+    <tr><td class="sno-cell">15</td><td class="time-cell">12:31 pm- 12:35 pm</td><td class="activity-cell">Group Dance by Debdyuti Paul, Arpita Saha, Shubhangi Datta, Sayani Mallick, Sandita Sarkar, Sneha Sarkar (Bengali Song) (2nd Year).<br><audio controls preload="metadata"><source src="15.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">16</td><td class="time-cell">12:36 pm- 12:46 pm</td><td class="activity-cell">BMLS Introduction &amp; Felicitation.</td></tr>
+    <tr><td class="sno-cell">17</td><td class="time-cell">12:46 pm-12:50 pm</td><td class="activity-cell">Song by Souvik Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="17.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+  </tbody></table>
+  <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
+</div>
+
+<!-- PAGE 2 -->
+<div class="page mx-auto mb-10 box-border w-[800px] max-w-full rounded-2xl border-t-[10px] border-purple-600 bg-white p-10 shadow-xl shadow-black/10 transition-colors duration-200 dark:border-purple-400 dark:bg-gray-900 dark:shadow-black/40 sm:px-6">
+  <div class="header mb-5 text-center"><img src="logo.png" alt="Pharmethyst Logo" class="mx-auto mb-4 max-h-20"></div>
+  <table class="mt-4 w-full border-collapse"><thead><tr>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">S.No.</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
+  </tr></thead><tbody>
+    <tr><td class="sno-cell">18</td><td class="time-cell">12:51 pm- 12:55 pm</td><td class="activity-cell">Duet Girl’s Dance (Diya Dey, Annekha Maity) (4th Year).<br><audio controls preload="metadata"><source src="18.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">19</td><td class="time-cell">12:56 pm- 1:00 pm</td><td class="activity-cell">Solo Song by Subhadeep Dey (3rd Year).<br><video controls playsinline preload="metadata"><source src="19.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr class="bg-purple-200 dark:bg-purple-900/70"><td colspan="3" class="border border-purple-300 p-2.5 text-center text-sm font-bold tracking-wider text-purple-950 dark:border-purple-800 dark:text-purple-100">TIFFIN BREAK: 1:00 PM- 1:30 PM</td></tr>
+    <tr><td class="sno-cell">20</td><td class="time-cell">1:31 pm- 1:35 pm</td><td class="activity-cell">Song by Debashis Sarkar (D.Pharm 1st Year).<br><video controls playsinline preload="metadata"><source src="20.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">21</td><td class="time-cell">1:36 pm- 1:40 pm</td><td class="activity-cell">BMLS Solo Dance.<br><audio controls preload="metadata"><source src="21.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">22</td><td class="time-cell">1:41 pm- 1:45 pm</td><td class="activity-cell">Song by Titli Ghosh &amp; Srijita Roza (1st Year).<br><video controls playsinline preload="metadata"><source src="22.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">23</td><td class="time-cell">1:46 pm-1:50 pm</td><td class="activity-cell">Group Dance by Md Tushar, Ankita Chakraborty, Nikita Bag, Nabanita Maity (3rd Year).<br><video controls playsinline preload="metadata"><source src="23.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">24</td><td class="time-cell">1:51 pm-2:00 pm</td><td class="activity-cell">Group Song by Sagnik Roy, Sudipta Pal, Soumesh Das, Ayush Saha, Aritra Ganguly (2nd Year).<br><video controls playsinline preload="metadata"><source src="24.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">25</td><td class="time-cell">2:01 pm-2:05 pm</td><td class="activity-cell">Group Dance by Hriti Sinha, Srija Mondal, Diya Dey (4th Year).<br><audio controls preload="metadata"><source src="25.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">26</td><td class="time-cell">2:06 pm-2:10 pm</td><td class="activity-cell">Solo song by Baishali Chakraborty (2nd Year).<br><video controls playsinline preload="metadata"><source src="26.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">27</td><td class="time-cell">2:11 pm- 2:15 pm</td><td class="activity-cell">Group Dance by Shubhangi Datta, Arpita Saha, Ipsita Maji, Dipanwita Dan &amp; Sarika Giri in South Indian Song (2nd Year).<br><audio controls preload="metadata"><source src="27.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">28</td><td class="time-cell">2:16 pm-2:20 pm</td><td class="activity-cell"></td></tr>
+    <tr><td class="sno-cell">29</td><td class="time-cell">2:21 pm-2:25 pm</td><td class="activity-cell">3rd Year + 4th Year Group Dance by Hriti Sinha, Srija Mondal, Diya Dey, Panranki Avinash, Nabanita Maity, Ankita Chakraborty, Mina Das.<br><audio controls preload="metadata"><source src="29.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">30</td><td class="time-cell">2:26 pm - 2:30 am</td><td class="activity-cell">Group song by Shubhangi Datta, Arpita Saha &amp; Sayani Mallick (2nd Year).</td></tr>
+    <tr><td class="sno-cell">31</td><td class="time-cell">2:31 pm-2:35 pm</td><td class="activity-cell">Solo Dance by Sarika Giri (2nd Year).<br><audio controls preload="metadata"><source src="31.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">32</td><td class="time-cell">2:36 pm- 2:50 pm</td><td class="activity-cell">Boys and Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="32.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">33</td><td class="time-cell">2:51 pm-2:55 pm</td><td class="activity-cell">(1st Year Group Dance) by Aditi Bera, Ayendrila Singha, Mahima Khatun, Argha Dutta, Faiyaz Reza, Jyotishman Dutta, Ankit Sarkar, Suraj Das.<br><audio controls preload="metadata"><source src="33.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">34</td><td class="time-cell">2:56 pm-3:00 pm</td><td class="activity-cell">Duet Song by Anurag Chakraborty &amp; Ritika Nath (1st Year).</td></tr>
+    <tr><td class="sno-cell">35</td><td class="time-cell">3:01 pm-3:10 pm</td><td class="activity-cell">Solo Dance by Ashrunu Ghosh (3rd Year).<br><video controls playsinline preload="metadata"><source src="35.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">36</td><td class="time-cell">3:11 pm-3:15 pm</td><td class="activity-cell">Duet Dance by Sarika Giri &amp; Pritam Mondal (2nd Year).<br><audio controls preload="metadata"><source src="36.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+  </tbody></table>
+  <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
+</div>
+
+<!-- PAGE 3 -->
+<div class="page mx-auto mb-10 box-border w-[800px] max-w-full rounded-2xl border-t-[10px] border-purple-600 bg-white p-10 shadow-xl shadow-black/10 transition-colors duration-200 dark:border-purple-400 dark:bg-gray-900 dark:shadow-black/40 sm:px-6">
+  <div class="header mb-5 text-center"><img src="logo.png" alt="Pharmethyst Logo" class="mx-auto mb-4 max-h-20"></div>
+  <table class="mt-4 w-full border-collapse"><thead><tr>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">S.No.</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
+    <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
+  </tr></thead><tbody>
+    <tr><td class="sno-cell">37</td><td class="time-cell">3:16 pm-3:20 pm</td><td class="activity-cell">Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="37.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">38</td><td class="time-cell">3:20 pm-3:25 pm</td><td class="activity-cell">Group Dance by Ankita Ghosh, Rupsa Sarkar, Farhin Khatun, Baishali Chakraborty (2nd Year).<br><audio controls preload="metadata"><source src="38.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">39</td><td class="time-cell">3:26 pm-3:30 pm</td><td class="activity-cell">Group Dance by Boys (3rd Year).<br><video controls playsinline preload="metadata"><source src="39.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">40</td><td class="time-cell">3:31 pm-3:35 pm</td><td class="activity-cell">Special Performance by 2nd Year.<br><audio controls preload="metadata"><source src="40.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">41</td><td class="time-cell">3:36 pm-3:45 pm</td><td class="activity-cell">Mr. &amp; Ms. Freshers Announcement.</td></tr>
+  </tbody></table>
+  <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
+</div>
+
+<style>
+.sno-cell,.time-cell,.activity-cell{border:1px solid rgb(209 213 219);padding:10px;vertical-align:top;font-size:13px;}
+.sno-cell{width:40px;text-align:center;font-size:14px;font-weight:700;color:rgb(126 34 206);}
+.time-cell{width:150px;font-size:14px;font-weight:700;color:rgb(51 65 85);}
+.activity-cell{color:rgb(31 41 55);}
+html.dark .sno-cell,html.dark .time-cell,html.dark .activity-cell{border-color:rgb(55 65 81);}
+html.dark .sno-cell{color:rgb(216 180 254);}
+html.dark .time-cell{color:rgb(226 232 240);}
+html.dark .activity-cell{color:rgb(229 231 235);}
+table tbody tr:not(.bg-purple-200):nth-child(even) td{background-color:#fdfaff;}
+html.dark table tbody tr:not(.bg-purple-200):nth-child(even) td{background-color:#20232b;}
+</style>
+</body>
+</html>
