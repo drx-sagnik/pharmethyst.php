@@ -6,6 +6,38 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script>tailwind.config={darkMode:"class"}</script>
 <title>Pharmethyst Fresher's Schedule</title>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc
+  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDnwgsieJSgGSStirVdEn2D5PxH1r7AMBLE",
+    authDomain: "votes-for-your-choice.firebaseapp.com",
+    projectId: "votes-for-your-choice",
+    storageBucket: "votes-for-your-choice.firebasestorage.app",
+    messagingSenderId: "248425327162",
+    appId: "1:248425327162:web:eefb57e9f7fa90c9e0703"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.pharmethystFirebase = {
+    db,
+    doc,
+    getDoc,
+    setDoc
+  };
+
+  window.dispatchEvent(new Event("firebase-ready"));
+</script>
+
 <style>
   html { color-scheme: light; }
   html.dark { color-scheme: dark; }
@@ -55,6 +87,111 @@
       },{once:true});
       audio.load();
     });
+
+  const ACTIVITY_COLLECTION = 'pharmethystActivityStatus';
+
+  function setButtonVisual(button, completed) {
+    const icon = button.querySelector('.complete-icon');
+    const label = button.querySelector('.complete-label');
+    if (completed) {
+      button.classList.add('is-complete');
+      icon.textContent = '✓';
+      label.textContent = 'Completed — Mark Incomplete';
+      button.setAttribute('aria-pressed', 'true');
+    } else {
+      button.classList.remove('is-complete');
+      icon.textContent = '○';
+      label.textContent = 'Mark Complete';
+      button.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function updateSyncText(container, text, isError=false) {
+    const sync = container.querySelector('.sync-label');
+    if (!sync) return;
+    sync.textContent = text;
+    sync.classList.toggle('text-red-600', isError);
+    sync.classList.toggle('dark:text-red-400', isError);
+  }
+
+  async function readActivityStatus(activityId) {
+    const fb = window.pharmethystFirebase;
+    if (!fb) return null;
+    const snap = await fb.getDoc(fb.doc(fb.db, ACTIVITY_COLLECTION, String(activityId)));
+    if (!snap.exists()) return false;
+    return !!snap.data().completed;
+  }
+
+  async function writeActivityStatus(activityId, completed) {
+    const fb = window.pharmethystFirebase;
+    if (!fb) throw new Error('Firebase is not ready.');
+    await fb.setDoc(
+      fb.doc(fb.db, ACTIVITY_COLLECTION, String(activityId)),
+      {
+        completed: !!completed,
+        activityId: Number(activityId),
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
+  }
+
+
+  function refreshCompletionSummary() {
+    const buttons = document.querySelectorAll('.complete-btn');
+    const completed = [...buttons].filter(b => b.getAttribute('aria-pressed') === 'true').length;
+    const summary = document.getElementById('completion-summary');
+    if (summary) summary.textContent = `${completed} completed`;
+  }
+
+  async function initCompletionTracking() {
+    const statusBoxes = document.querySelectorAll('[data-activity-status]');
+    if (!statusBoxes.length) return;
+
+    await new Promise(resolve => {
+      if (window.pharmethystFirebase) return resolve();
+      window.addEventListener('firebase-ready', resolve, { once: true });
+      setTimeout(resolve, 5000);
+    });
+
+    for (const box of statusBoxes) {
+      const activityId = box.getAttribute('data-activity-status');
+      const button = box.querySelector('.complete-btn');
+      if (!button) continue;
+
+      try {
+        const saved = await readActivityStatus(activityId);
+        setButtonVisual(button, !!saved);
+        updateSyncText(box, 'Synced with Firebase');
+        refreshCompletionSummary();
+      } catch (error) {
+        console.error('Unable to load activity status', activityId, error);
+        setButtonVisual(button, localStorage.getItem('activity-complete-' + activityId) === 'true');
+        updateSyncText(box, 'Firebase read failed', true);
+      }
+
+      button.addEventListener('click', async () => {
+        const completed = button.getAttribute('aria-pressed') !== 'true';
+        button.disabled = true;
+        updateSyncText(box, 'Saving…');
+
+        try {
+          await writeActivityStatus(activityId, completed);
+          setButtonVisual(button, completed);
+          localStorage.setItem('activity-complete-' + activityId, String(completed));
+          updateSyncText(box, completed ? 'Saved as completed' : 'Saved as incomplete');
+          refreshCompletionSummary();
+        } catch (error) {
+          console.error('Unable to save activity status', activityId, error);
+          updateSyncText(box, 'Could not save to Firebase', true);
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+  }
+
+  initCompletionTracking();
   });
 })();
 </script>
@@ -62,6 +199,24 @@
   table tbody tr:not(.bg-purple-200):not(.dark\:bg-purple-900\/70):nth-child(even) td { background-color:#fdfaff; }
   html.dark table tbody tr:not(.bg-purple-200):not(.dark\:bg-purple-900\/70):nth-child(even) td { background-color:#20232b; }
   audio { display:block; max-width:100%; width:320px; margin-top:8px; }
+
+  .complete-btn.is-complete {
+    border-color: rgb(22 163 74);
+    background-color: rgb(220 252 231);
+    color: rgb(21 128 61);
+  }
+  .complete-btn.is-complete:hover {
+    background-color: rgb(187 247 208);
+  }
+  html.dark .complete-btn.is-complete {
+    border-color: rgb(34 197 94);
+    background-color: rgb(20 83 45 / 0.45);
+    color: rgb(187 247 208);
+  }
+  .complete-btn:disabled {
+    cursor: wait;
+    opacity: .65;
+  }
 </style>
 </head>
 <body class="min-h-screen bg-purple-50 px-5 py-5 text-gray-900 transition-colors duration-200 dark:bg-gray-950 dark:text-gray-100 sm:px-3">
@@ -73,6 +228,7 @@
     <option value="dark">Dark</option>
     <option value="system">System Default</option>
   </select>
+  <span id="completion-summary" class="ml-2 hidden rounded-full bg-purple-100 px-2 py-1 text-[11px] font-bold text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 sm:inline-flex">0 completed</span>
 </div>
 <!-- PAGE 1 -->
 <div class="page mx-auto mb-10 box-border w-[800px] max-w-full rounded-2xl border-t-[10px] border-purple-600 bg-white p-10 shadow-xl shadow-black/10 transition-colors duration-200 dark:border-purple-400 dark:bg-gray-900 dark:shadow-black/40 sm:px-6">
@@ -87,23 +243,176 @@
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
   </tr></thead><tbody>
-    <tr><td class="sno-cell">1</td><td class="time-cell">10.30 am-10:35 am</td><td class="activity-cell">Introduction and Speech of Principal Sir.</td></tr>
-    <tr><td class="sno-cell">2</td><td class="time-cell">10:36 am-10:45 am</td><td class="activity-cell">Lamp Lighting Ceremony.</td></tr>
-    <tr><td class="sno-cell">3</td><td class="time-cell">10:46 am-10:50 am</td><td class="activity-cell">Opening Song by Sutapa Majumder Ma’am.</td></tr>
-    <tr><td class="sno-cell">4</td><td class="time-cell">10:51 am-10:55 am</td><td class="activity-cell">Solo Dance by Rupsa Sarkar (2nd Year).<br><audio controls preload="metadata"><source src="4.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">5</td><td class="time-cell">10:56 am -11:00 am</td><td class="activity-cell">(D.Pharm 1st Year) Group Song by Sukanta Nath, Purnima Gomasta, Sabnam Khatun, Koyeli Das.<br><video controls playsinline preload="metadata"><source src="5.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">6</td><td class="time-cell">11:01 am-11:15 am</td><td class="activity-cell">1st Year Introduction &amp; Felicitation. (Roll No. 01-15)</td></tr>
-    <tr><td class="sno-cell">7</td><td class="time-cell">11:16 am-11:30 am</td><td class="activity-cell">Drama Play (4th Year).</td></tr>
-    <tr><td class="sno-cell">8</td><td class="time-cell">11:31 am - 11:35 am</td><td class="activity-cell">Dance by Mili Mondal (1st Year).<br><audio controls preload="metadata"><source src="8.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">9</td><td class="time-cell">11:36 am - 11:40 am</td><td class="activity-cell">Duet Song by Upasana Dutta &amp; Soumily Dutta (2nd Year).</td></tr>
-    <tr><td class="sno-cell">10</td><td class="time-cell">11:41 am-11:55 am</td><td class="activity-cell">1st Your Introduction &amp; Felicitation. (Roll No. 16-30)</td></tr>
-    <tr><td class="sno-cell">11</td><td class="time-cell">11:56 am-12:00 pm</td><td class="activity-cell">Principal sir Performance.</td></tr>
-    <tr><td class="sno-cell">12</td><td class="time-cell">12:01 pm- 12:10 pm</td><td class="activity-cell">Solo song by Abir Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="12.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">13</td><td class="time-cell">12:11 pm-12:15 pm</td><td class="activity-cell">Dance by Mouli Karmakar (D.Pharm 1st Year).<br><audio controls preload="metadata"><source src="13.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">14</td><td class="time-cell">12:16 pm-12:30 pm</td><td class="activity-cell">1st Year Introduction and Felicitation. (Roll No. 31-Rest)</td></tr>
-    <tr><td class="sno-cell">15</td><td class="time-cell">12:31 pm- 12:35 pm</td><td class="activity-cell">Group Dance by Debdyuti Paul, Arpita Saha, Shubhangi Datta, Sayani Mallick, Sandita Sarkar, Sneha Sarkar (Bengali Song) (2nd Year).<br><audio controls preload="metadata"><source src="15.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">16</td><td class="time-cell">12:36 pm- 12:46 pm</td><td class="activity-cell">BMLS Introduction &amp; Felicitation.</td></tr>
-    <tr><td class="sno-cell">17</td><td class="time-cell">12:46 pm-12:50 pm</td><td class="activity-cell">Song by Souvik Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="17.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">1</td><td class="time-cell">10.30 am-10:35 am</td><td class="activity-cell">Introduction and Speech of Principal Sir.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="1">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="1">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">2</td><td class="time-cell">10:36 am-10:45 am</td><td class="activity-cell">Lamp Lighting Ceremony.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="2">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="2">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">3</td><td class="time-cell">10:46 am-10:50 am</td><td class="activity-cell">Opening Song by Sutapa Majumder Ma’am.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="3">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="3">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">4</td><td class="time-cell">10:51 am-10:55 am</td><td class="activity-cell">Solo Dance by Rupsa Sarkar (2nd Year).<br><audio controls preload="metadata"><source src="4.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="4">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="4">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">5</td><td class="time-cell">10:56 am -11:00 am</td><td class="activity-cell">(D.Pharm 1st Year) Group Song by Sukanta Nath, Purnima Gomasta, Sabnam Khatun, Koyeli Das.<br><video controls playsinline preload="metadata"><source src="5.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="5">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="5">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">6</td><td class="time-cell">11:01 am-11:15 am</td><td class="activity-cell">1st Year Introduction &amp; Felicitation. (Roll No. 01-15)
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="6">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="6">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">7</td><td class="time-cell">11:16 am-11:30 am</td><td class="activity-cell">Drama Play (4th Year).
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="7">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="7">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">8</td><td class="time-cell">11:31 am - 11:35 am</td><td class="activity-cell">Dance by Mili Mondal (1st Year).<br><audio controls preload="metadata"><source src="8.mp3" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="8">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="8">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">9</td><td class="time-cell">11:36 am - 11:40 am</td><td class="activity-cell">Duet Song by Upasana Dutta &amp; Soumily Dutta (2nd Year).
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="9">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="9">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">10</td><td class="time-cell">11:41 am-11:55 am</td><td class="activity-cell">1st Your Introduction &amp; Felicitation. (Roll No. 16-30)
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="10">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="10">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">11</td><td class="time-cell">11:56 am-12:00 pm</td><td class="activity-cell">Principal sir Performance.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="11">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="11">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">12</td><td class="time-cell">12:01 pm- 12:10 pm</td><td class="activity-cell">Solo song by Abir Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="12.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="12">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="12">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">13</td><td class="time-cell">12:11 pm-12:15 pm</td><td class="activity-cell">Dance by Mouli Karmakar (D.Pharm 1st Year).<br><audio controls preload="metadata"><source src="13.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="13">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="13">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">14</td><td class="time-cell">12:16 pm-12:30 pm</td><td class="activity-cell">1st Year Introduction and Felicitation. (Roll No. 31-Rest)
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="14">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="14">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">15</td><td class="time-cell">12:31 pm- 12:35 pm</td><td class="activity-cell">Group Dance by Debdyuti Paul, Arpita Saha, Shubhangi Datta, Sayani Mallick, Sandita Sarkar, Sneha Sarkar (Bengali Song) (2nd Year).<br><audio controls preload="metadata"><source src="15.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="15">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="15">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">16</td><td class="time-cell">12:36 pm- 12:46 pm</td><td class="activity-cell">BMLS Introduction &amp; Felicitation.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="16">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="16">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">17</td><td class="time-cell">12:46 pm-12:50 pm</td><td class="activity-cell">Song by Souvik Das (3rd Year).<br><video controls playsinline preload="metadata"><source src="17.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="17">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="17">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
   </tbody></table>
   <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
 </div>
@@ -116,26 +425,188 @@
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
   </tr></thead><tbody>
-    <tr><td class="sno-cell">18</td><td class="time-cell">12:51 pm- 12:55 pm</td><td class="activity-cell">Duet Girl’s Dance (Diya Dey, Annekha Maity) (4th Year).<br><audio controls preload="metadata"><source src="18.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">19</td><td class="time-cell">12:56 pm- 1:00 pm</td><td class="activity-cell">Solo Song by Subhadeep Dey (3rd Year).<br><video controls playsinline preload="metadata"><source src="19.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
+    <tr><td class="sno-cell">18</td><td class="time-cell">12:51 pm- 12:55 pm</td><td class="activity-cell">Duet Girl’s Dance (Diya Dey, Annekha Maity) (4th Year).<br><audio controls preload="metadata"><source src="18.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="18">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="18">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">19</td><td class="time-cell">12:56 pm- 1:00 pm</td><td class="activity-cell">Solo Song by Subhadeep Dey (3rd Year).<br><video controls playsinline preload="metadata"><source src="19.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="19">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="19">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
     <tr class="bg-purple-200 dark:bg-purple-900/70"><td colspan="3" class="border border-purple-300 p-2.5 text-center text-sm font-bold tracking-wider text-purple-950 dark:border-purple-800 dark:text-purple-100">TIFFIN BREAK: 1:00 PM- 1:30 PM</td></tr>
-    <tr><td class="sno-cell">20</td><td class="time-cell">1:31 pm- 1:35 pm</td><td class="activity-cell">Song by Debashis Sarkar (D.Pharm 1st Year).<br><video controls playsinline preload="metadata"><source src="20.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">21</td><td class="time-cell">1:36 pm- 1:40 pm</td><td class="activity-cell">BMLS Solo Dance.<br><audio controls preload="metadata"><source src="21.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">22</td><td class="time-cell">1:41 pm- 1:45 pm</td><td class="activity-cell">Song by Titli Ghosh &amp; Srijita Roza (1st Year).<br><video controls playsinline preload="metadata"><source src="22.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">23</td><td class="time-cell">1:46 pm-1:50 pm</td><td class="activity-cell">Group Dance by Md Tushar, Ankita Chakraborty, Nikita Bag, Nabanita Maity (3rd Year).<br><video controls playsinline preload="metadata"><source src="23.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">24</td><td class="time-cell">1:51 pm-2:00 pm</td><td class="activity-cell">Group Song by Sagnik Roy, Sudipta Pal, Soumesh Das, Ayush Saha, Aritra Ganguly (2nd Year).<br><video controls playsinline preload="metadata"><source src="24.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">25</td><td class="time-cell">2:01 pm-2:05 pm</td><td class="activity-cell">Group Dance by Hriti Sinha, Srija Mondal, Diya Dey (4th Year).<br><audio controls preload="metadata"><source src="25.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">26</td><td class="time-cell">2:06 pm-2:10 pm</td><td class="activity-cell">Solo song by Baishali Chakraborty (2nd Year).<br><video controls playsinline preload="metadata"><source src="26.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">27</td><td class="time-cell">2:11 pm- 2:15 pm</td><td class="activity-cell">Group Dance by Shubhangi Datta, Arpita Saha, Ipsita Maji, Dipanwita Dan &amp; Sarika Giri in South Indian Song (2nd Year).<br><audio controls preload="metadata"><source src="27.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">20</td><td class="time-cell">1:31 pm- 1:35 pm</td><td class="activity-cell">Song by Debashis Sarkar (D.Pharm 1st Year).<br><video controls playsinline preload="metadata"><source src="20.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="20">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="20">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">21</td><td class="time-cell">1:36 pm- 1:40 pm</td><td class="activity-cell">BMLS Solo Dance.<br><audio controls preload="metadata"><source src="21.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="21">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="21">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">22</td><td class="time-cell">1:41 pm- 1:45 pm</td><td class="activity-cell">Song by Titli Ghosh &amp; Srijita Roza (1st Year).<br><video controls playsinline preload="metadata"><source src="22.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="22">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="22">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">23</td><td class="time-cell">1:46 pm-1:50 pm</td><td class="activity-cell">Group Dance by Md Tushar, Ankita Chakraborty, Nikita Bag, Nabanita Maity (3rd Year).<br><video controls playsinline preload="metadata"><source src="23.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="23">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="23">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">24</td><td class="time-cell">1:51 pm-2:00 pm</td><td class="activity-cell">Group Song by Sagnik Roy, Sudipta Pal, Soumesh Das, Ayush Saha, Aritra Ganguly (2nd Year).<br><video controls playsinline preload="metadata"><source src="24.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="24">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="24">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">25</td><td class="time-cell">2:01 pm-2:05 pm</td><td class="activity-cell">Group Dance by Hriti Sinha, Srija Mondal, Diya Dey (4th Year).<br><audio controls preload="metadata"><source src="25.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="25">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="25">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">26</td><td class="time-cell">2:06 pm-2:10 pm</td><td class="activity-cell">Solo song by Baishali Chakraborty (2nd Year).<br><video controls playsinline preload="metadata"><source src="26.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="26">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="26">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">27</td><td class="time-cell">2:11 pm- 2:15 pm</td><td class="activity-cell">Group Dance by Shubhangi Datta, Arpita Saha, Ipsita Maji, Dipanwita Dan &amp; Sarika Giri in South Indian Song (2nd Year).<br><audio controls preload="metadata"><source src="27.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="27">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="27">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
     <tr><td class="sno-cell">28</td><td class="time-cell">2:16 pm-2:20 pm</td><td class="activity-cell"></td></tr>
-    <tr><td class="sno-cell">29</td><td class="time-cell">2:21 pm-2:25 pm</td><td class="activity-cell">3rd Year + 4th Year Group Dance by Hriti Sinha, Srija Mondal, Diya Dey, Panranki Avinash, Nabanita Maity, Ankita Chakraborty, Mina Das.<br><audio controls preload="metadata"><source src="29.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">30</td><td class="time-cell">2:26 pm - 2:30 am</td><td class="activity-cell">Group song by Shubhangi Datta, Arpita Saha &amp; Sayani Mallick (2nd Year).</td></tr>
-    <tr><td class="sno-cell">31</td><td class="time-cell">2:31 pm-2:35 pm</td><td class="activity-cell">Solo Dance by Sarika Giri (2nd Year).<br><audio controls preload="metadata"><source src="31.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">32</td><td class="time-cell">2:36 pm- 2:50 pm</td><td class="activity-cell">Boys and Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="32.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">33</td><td class="time-cell">2:51 pm-2:55 pm</td><td class="activity-cell">(1st Year Group Dance) by Aditi Bera, Ayendrila Singha, Mahima Khatun, Argha Dutta, Faiyaz Reza, Jyotishman Dutta, Ankit Sarkar, Suraj Das.<br><audio controls preload="metadata"><source src="33.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">34</td><td class="time-cell">2:56 pm-3:00 pm</td><td class="activity-cell">Duet Song by Anurag Chakraborty &amp; Ritika Nath (1st Year).</td></tr>
-    <tr><td class="sno-cell">35</td><td class="time-cell">3:01 pm-3:10 pm</td><td class="activity-cell">Solo Dance by Ashrunu Ghosh (3rd Year).<br><video controls playsinline preload="metadata"><source src="35.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">36</td><td class="time-cell">3:11 pm-3:15 pm</td><td class="activity-cell">Duet Dance by Sarika Giri &amp; Pritam Mondal (2nd Year).<br><audio controls preload="metadata"><source src="36.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
+    <tr><td class="sno-cell">29</td><td class="time-cell">2:21 pm-2:25 pm</td><td class="activity-cell">3rd Year + 4th Year Group Dance by Hriti Sinha, Srija Mondal, Diya Dey, Panranki Avinash, Nabanita Maity, Ankita Chakraborty, Mina Das.<br><audio controls preload="metadata"><source src="29.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="29">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="29">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">30</td><td class="time-cell">2:26 pm - 2:30 am</td><td class="activity-cell">Group song by Shubhangi Datta, Arpita Saha &amp; Sayani Mallick (2nd Year).
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="30">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="30">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">31</td><td class="time-cell">2:31 pm-2:35 pm</td><td class="activity-cell">Solo Dance by Sarika Giri (2nd Year).<br><audio controls preload="metadata"><source src="31.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="31">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="31">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">32</td><td class="time-cell">2:36 pm- 2:50 pm</td><td class="activity-cell">Boys and Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="32.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="32">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="32">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">33</td><td class="time-cell">2:51 pm-2:55 pm</td><td class="activity-cell">(1st Year Group Dance) by Aditi Bera, Ayendrila Singha, Mahima Khatun, Argha Dutta, Faiyaz Reza, Jyotishman Dutta, Ankit Sarkar, Suraj Das.<br><audio controls preload="metadata"><source src="33.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="33">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="33">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">34</td><td class="time-cell">2:56 pm-3:00 pm</td><td class="activity-cell">Duet Song by Anurag Chakraborty &amp; Ritika Nath (1st Year).
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="34">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="34">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">35</td><td class="time-cell">3:01 pm-3:10 pm</td><td class="activity-cell">Solo Dance by Ashrunu Ghosh (3rd Year).<br><video controls playsinline preload="metadata"><source src="35.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="35">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="35">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">36</td><td class="time-cell">3:11 pm-3:15 pm</td><td class="activity-cell">Duet Dance (2nd Year).<br><audio controls preload="metadata"><source src="36.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="36">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="36">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
   </tbody></table>
   <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
 </div>
@@ -148,11 +619,56 @@
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Time</th>
     <th class="border border-purple-800 bg-purple-600 p-2.5 text-left text-sm text-white dark:border-purple-500 dark:bg-purple-500">Activities</th>
   </tr></thead><tbody>
-    <tr><td class="sno-cell">37</td><td class="time-cell">3:16 pm-3:20 pm</td><td class="activity-cell">Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="37.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">38</td><td class="time-cell">3:20 pm-3:25 pm</td><td class="activity-cell">Group Dance by Ankita Ghosh, Rupsa Sarkar, Farhin Khatun, Baishali Chakraborty (2nd Year).<br><audio controls preload="metadata"><source src="38.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">39</td><td class="time-cell">3:26 pm-3:30 pm</td><td class="activity-cell">Group Dance by Boys (3rd Year).<br><video controls playsinline preload="metadata"><source src="39.mp4" type="video/mp4">Your browser does not support HTML5 video.</video></td></tr>
-    <tr><td class="sno-cell">40</td><td class="time-cell">3:31 pm-3:35 pm</td><td class="activity-cell">Special Performance by 2nd Year.<br><audio controls preload="metadata"><source src="40.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio></td></tr>
-    <tr><td class="sno-cell">41</td><td class="time-cell">3:36 pm-3:45 pm</td><td class="activity-cell">Mr. &amp; Ms. Freshers Announcement.</td></tr>
+    <tr><td class="sno-cell">37</td><td class="time-cell">3:16 pm-3:20 pm</td><td class="activity-cell">Girls Group Dance (3rd Year).<br><video controls playsinline preload="metadata"><source src="37.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="37">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="37">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">38</td><td class="time-cell">3:20 pm-3:25 pm</td><td class="activity-cell">Group Dance by Ankita Ghosh, Rupsa Sarkar, Farhin Khatun, Baishali Chakraborty (2nd Year).<br><audio controls preload="metadata"><source src="38.mpeg" type="audio/mpeg">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="38">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="38">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">39</td><td class="time-cell">3:26 pm-3:30 pm</td><td class="activity-cell">Group Dance by Boys (3rd Year).<br><video controls playsinline preload="metadata"><source src="39.mp4" type="video/mp4">Your browser does not support HTML5 video.</video>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="39">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="39">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">40</td><td class="time-cell">3:31 pm-3:35 pm</td><td class="activity-cell">Special Performance by 2nd Year.<br><audio controls preload="metadata"><source src="40.aac" type="audio/aac">Your browser does not support HTML5 audio.</audio>
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="40">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="40">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
+    <tr><td class="sno-cell">41</td><td class="time-cell">3:36 pm-3:45 pm</td><td class="activity-cell">Mr. &amp; Ms. Freshers Announcement.
+      <div class="activity-status mt-3 flex flex-wrap items-center gap-2" data-activity-status="41">
+        <button type="button"
+          class="complete-btn inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/60"
+          data-activity-id="41">
+          <span class="complete-icon">○</span>
+          <span class="complete-label">Mark Complete</span>
+        </button>
+        <span class="sync-label text-[11px] font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+      </div></td></tr>
   </tbody></table>
   <div class="mt-5 text-right text-base font-bold tracking-[2px] text-purple-700 dark:text-purple-300"><img src="logo.png" alt="Pharmethyst Logo" class="inline-block max-h-[30px] align-middle"></div>
 </div>
